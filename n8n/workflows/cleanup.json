@@ -1,0 +1,34 @@
+{
+  "name": "Cleanup",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cleanup",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "cleanup"
+    },
+    {
+      "parameters": {
+        "content": "## Cleanup Workflow\n\n1. Webhook Trigger (`job_id`)\n2. Locate `/data/jobs/<job_id>`\n3. Delete `audio.webm`\n4. Idempotent check (never fail if file is already deleted)\n5. Complete",
+        "height": 260,
+        "width": 460
+      },
+      "name": "Cleanup Specification Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [460, 240]
+    }
+  ],
+  "connections": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}

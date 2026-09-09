@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: ai_meeting_intelligence_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=false
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=UTC
+      # Data retention & execution pruning
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=24
+      # Shared job storage directory inside container
+      - JOB_STORAGE_DIR=/data/jobs
+      # Provider API credentials (injected from .env)
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Shared filesystem mount: host job storage mapped into n8n container
+      - ../data/jobs:/data/jobs
+      - ./workflows:/workflows
+
+volumes:
+  n8n_data:
