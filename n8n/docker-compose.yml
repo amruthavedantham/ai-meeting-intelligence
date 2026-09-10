@@ -19,6 +19,7 @@ services:
       - EXECUTIONS_DATA_MAX_AGE=24
       # Shared job storage directory inside container
       - JOB_STORAGE_DIR=/data/jobs
+      - NODE_FUNCTION_ALLOW_BUILTIN=fs
       # Provider API credentials (injected from .env)
       - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}

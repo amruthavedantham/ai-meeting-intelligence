@@ -1,32 +1,46 @@
 {
+  "id": "fRB0kyve1V72D5Y4",
   "name": "Cleanup",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "cleanup",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
         "options": {}
       },
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [240, 300],
-      "webhookId": "cleanup"
+      "webhookId": "cleanup",
+      "id": "d111d21c-1598-4af9-8267-0856e18762c2"
     },
     {
       "parameters": {
-        "content": "## Cleanup Workflow\n\n1. Webhook Trigger (`job_id`)\n2. Locate `/data/jobs/<job_id>`\n3. Delete `audio.webm`\n4. Idempotent check (never fail if file is already deleted)\n5. Complete",
-        "height": 260,
-        "width": 460
+        "jsCode": "const fs = require('fs');\nconst input = $input.first().json;\nconst body = input.body || input;\nconst jobId = body.job_id;\n\n// 1. Strict job_id validation (prevent path traversal and arbitrary paths)\nif (!jobId || typeof jobId !== 'string' || !/^job_[a-zA-Z0-9_-]+$/.test(jobId)) {\n  throw new Error('INVALID_JOB_ID: Missing or invalid job_id in cleanup webhook payload');\n}\n\n// 2. Strict filesystem path resolution\nconst storageDir = '/data/jobs';\nconst jobDir = `${storageDir}/${jobId}`;\nconst audioPath = `${jobDir}/audio.webm`;\n\n// 3. Genuine idempotent deletion using fs.unlinkSync\nlet wasDeleted = false;\ntry {\n  fs.unlinkSync(audioPath);\n  wasDeleted = true;\n} catch (err) {\n  // Idempotent: if audio.webm is already missing (ENOENT), treat as success\n  if (err.code !== 'ENOENT') {\n    throw err;\n  }\n}\n\nreturn [{\n  json: {\n    success: true,\n    job_id: jobId,\n    target_audio: audioPath,\n    deleted: wasDeleted,\n    message: wasDeleted ? 'Temporary audio deleted successfully' : 'Temporary audio already absent (idempotent)'\n  }\n}];"
       },
-      "name": "Cleanup Specification Note",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [460, 240]
+      "name": "Idempotent Delete Audio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "id": "d111d21c-1598-4af9-8267-0856e18762c4"
     }
   ],
-  "connections": {},
-  "active": false,
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Idempotent Delete Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "executionOrder": "v1"
   },

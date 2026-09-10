@@ -1,32 +1,524 @@
 {
+  "id": "L2lk9ICBRz7kbCZG",
   "name": "Process Meeting",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "process-meeting",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
         "options": {}
       },
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [240, 300],
-      "webhookId": "process-meeting"
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "process-meeting",
+      "id": "de69a75c-19d9-4b8c-88f2-e197ad7b272e"
     },
     {
       "parameters": {
-        "content": "## Process Meeting Pipeline\n\n1. Webhook Trigger (`job_id`)\n2. Validate Job & Audio on shared filesystem (`/data/jobs/<job_id>`)\n3. Update status = 'transcribing'\n4. Call Deepgram (Multichannel + Diarization)\n5. Normalize to Transcript Contract\n6. Update status = 'analyzing'\n7. Call Gemini Flash (Structured JSON Schema)\n8. Validate MeetingData Contract\n9. Write `result.json` & update status = 'completed'\n10. Trigger Cleanup Workflow",
-        "height": 320,
-        "width": 540
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst jobId = body.job_id;\n\nif (!jobId || typeof jobId !== 'string' || !/^job_[a-zA-Z0-9_-]+$/.test(jobId)) {\n  throw new Error('INVALID_JOB_ID: Missing or invalid job_id in webhook payload');\n}\n\nconst storageDir = $env.JOB_STORAGE_DIR || '/data/jobs';\nconst jobDir = `${storageDir}/${jobId}`;\n\nconst jobProcessing = {\n  job_id: jobId,\n  status: 'processing'\n};\n\nreturn [{\n  json: {\n    job_id: jobId,\n    job_dir: jobDir,\n    target_file: `${jobDir}/job.json`\n  },\n  binary: {\n    data: {\n      data: Buffer.from(JSON.stringify(jobProcessing, null, 2), 'utf-8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'job.json'\n    }\n  }\n}];"
       },
-      "name": "Pipeline Specification Note",
-      "type": "n8n-nodes-base.stickyNote",
+      "name": "Validate Job & Paths",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc001"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.target_file }}",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Update Status: Processing",
+      "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [460, 200]
+      "position": [660, 300],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc002"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "={{ $('Validate Job & Paths').first().json.job_dir }}/audio.webm",
+        "options": {
+          "dataPropertyName": "data"
+        }
+      },
+      "name": "Read Audio File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [880, 300],
+      "onError": "continueErrorOutput",
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc003"
+    },
+    {
+      "parameters": {
+        "jsCode": "const binary = $input.first().binary;\nconst json = $input.first().json;\n\nconst jobInfo = $('Validate Job & Paths').first().json;\nconst jobId = jobInfo.job_id;\nconst jobDir = jobInfo.job_dir;\n\nif (!binary || !binary.data || !binary.data.data) {\n  throw new Error('INVALID_AUDIO: audio.webm is missing or unreadable');\n}\n\nif (json.fileSize !== undefined && json.fileSize <= 0) {\n  throw new Error('INVALID_AUDIO: audio.webm is empty');\n}\n\nconst audioBinary = binary.data;\n\nconst jobTranscribing = {\n  job_id: jobId,\n  status: 'transcribing'\n};\n\nreturn [{\n  json: {\n    job_id: jobId,\n    job_dir: jobDir,\n    target_file: `${jobDir}/job.json`\n  },\n  binary: {\n    data: {\n      data: Buffer.from(JSON.stringify(jobTranscribing, null, 2), 'utf-8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'job.json'\n    },\n    audio: audioBinary\n  }\n}];"
+      },
+      "name": "Validate Audio & Prepare Transcribing",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 240],
+      "onError": "continueErrorOutput",
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc004"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.target_file }}",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Update Status: Transcribing",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [1320, 240],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc005"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepgram.com/v1/listen",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "model", "value": "nova-2" },
+            { "name": "smart_format", "value": "true" },
+            { "name": "diarize", "value": "true" },
+            { "name": "multichannel", "value": "true" },
+            { "name": "utterances", "value": "true" }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Token {{ $env.DEEPGRAM_API_KEY }}" },
+            { "name": "Content-Type", "value": "audio/webm" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "audio"
+      },
+      "name": "Call Deepgram (STT + Diarize)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 240],
+      "onError": "continueErrorOutput",
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc006"
+    },
+    {
+      "parameters": {
+        "jsCode": "const deepgram = $input.first().json;\nconst jobInfo = $('Validate Job & Paths').first().json;\nconst jobId = jobInfo.job_id;\nconst jobDir = jobInfo.job_dir;\n\nif (!deepgram || !deepgram.results) {\n  throw new Error('TRANSCRIPTION_FAILED: Invalid or empty Deepgram response');\n}\n\nconst segments = [];\nconst speakerSet = new Set();\n\nif (Array.isArray(deepgram.results.utterances) && deepgram.results.utterances.length > 0) {\n  for (const u of deepgram.results.utterances) {\n    const speakerNum = (u.speaker !== undefined) ? u.speaker : (u.channel !== undefined ? u.channel : 0);\n    const speakerId = `speaker_${Number(speakerNum) + 1}`;\n    speakerSet.add(speakerId);\n    \n    segments.push({\n      speaker_id: speakerId,\n      start: Math.round(Number(u.start || 0) * 100) / 100,\n      end: Math.round(Number(u.end || 0) * 100) / 100,\n      text: (u.transcript || '').trim()\n    });\n  }\n} else if (Array.isArray(deepgram.results.channels)) {\n  deepgram.results.channels.forEach((ch, chIdx) => {\n    const alt = ch.alternatives?.[0];\n    if (!alt) return;\n\n    if (Array.isArray(alt.paragraphs?.paragraphs) && alt.paragraphs.paragraphs.length > 0) {\n      for (const p of alt.paragraphs.paragraphs) {\n        const speakerNum = (p.speaker !== undefined) ? p.speaker : chIdx;\n        const speakerId = `speaker_${Number(speakerNum) + 1}`;\n        speakerSet.add(speakerId);\n\n        segments.push({\n          speaker_id: speakerId,\n          start: Math.round(Number(p.start || 0) * 100) / 100,\n          end: Math.round(Number(p.end || 0) * 100) / 100,\n          text: (p.sentences?.map(s => s.text).join(' ') || '').trim()\n        });\n      }\n    } else if (Array.isArray(alt.words) && alt.words.length > 0) {\n      let currentSeg = null;\n      for (const w of alt.words) {\n        const speakerNum = (w.speaker !== undefined) ? w.speaker : chIdx;\n        const speakerId = `speaker_${Number(speakerNum) + 1}`;\n        speakerSet.add(speakerId);\n\n        if (!currentSeg || currentSeg.speaker_id !== speakerId) {\n          if (currentSeg && currentSeg.text.length > 0) segments.push(currentSeg);\n          currentSeg = {\n            speaker_id: speakerId,\n            start: Math.round(Number(w.start || 0) * 100) / 100,\n            end: Math.round(Number(w.end || 0) * 100) / 100,\n            text: w.punctuated_word || w.word\n          };\n        } else {\n          currentSeg.end = Math.round(Number(w.end || 0) * 100) / 100;\n          currentSeg.text += ' ' + (w.punctuated_word || w.word);\n        }\n      }\n      if (currentSeg && currentSeg.text.length > 0) segments.push(currentSeg);\n    } else if (alt.transcript && alt.transcript.trim().length > 0) {\n      const speakerId = `speaker_${chIdx + 1}`;\n      speakerSet.add(speakerId);\n      segments.push({\n        speaker_id: speakerId,\n        start: 0,\n        end: 0,\n        text: alt.transcript.trim()\n      });\n    }\n  });\n}\n\nsegments.sort((a, b) => a.start - b.start);\n\nif (speakerSet.size === 0) {\n  speakerSet.add('speaker_1');\n}\n\nconst speakers = Array.from(speakerSet).sort().map(id => {\n  const num = id.replace('speaker_', '');\n  return {\n    speaker_id: id,\n    label: `Speaker ${num}`\n  };\n});\n\nif (!Array.isArray(segments)) {\n  throw new Error('TRANSCRIPTION_FAILED: Transcript normalization failed');\n}\n\nconst jobAnalyzing = {\n  job_id: jobId,\n  status: 'analyzing'\n};\n\nreturn [{\n  json: {\n    job_id: jobId,\n    job_dir: jobDir,\n    speakers: speakers,\n    transcript: segments,\n    target_file: `${jobDir}/job.json`\n  },\n  binary: {\n    data: {\n      data: Buffer.from(JSON.stringify(jobAnalyzing, null, 2), 'utf-8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'job.json'\n    }\n  }\n}];"
+      },
+      "name": "Deepgram Adapter & Transcript Normalization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 240],
+      "onError": "continueErrorOutput",
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc007"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.target_file }}",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Update Status: Analyzing",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [1980, 240],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc008"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst jobId = input.job_id;\nconst jobDir = input.job_dir;\nconst speakers = input.speakers;\nconst transcript = input.transcript;\n\nconst transcriptFormatted = transcript.map(s => {\n  const spk = speakers.find(sp => sp.speaker_id === s.speaker_id);\n  const label = spk ? spk.label : s.speaker_id;\n  return `[${s.speaker_id} (${label})]: ${s.text}`;\n}).join('\\n');\n\nconst promptText = `You are an expert AI meeting intelligence analyzer.\\nAnalyze the following meeting transcript and extract structured meeting intelligence.\\n\\nCRITICAL RULES:\\n1. summary: A concise, accurate summary of the meeting discussion.\\n2. decisions: An array of concrete decisions agreed upon by the participants.\\n3. action_items: An array of action items.\\n   - task: The specific task description.\\n   - owner: The stable speaker_id (e.g., \"speaker_1\", \"speaker_2\") of the person assigned or responsible. If not clearly determinable from the transcript, you MUST set owner to null. NEVER guess or invent names.\\n   - deadline: A normalized ISO date string (YYYY-MM-DD) if a date was agreed, or null if unknown. NEVER invent dates.\\n   - priority: Exactly one of \"low\", \"medium\", or \"high\".\\n\\nValid speaker IDs in this meeting:\\n${JSON.stringify(speakers, null, 2)}\\n\\nTranscript:\\n${transcriptFormatted}`;\n\nconst geminiPayload = {\n  contents: [\n    {\n      parts: [\n        {\n          text: promptText\n        }\n      ]\n    }\n  ],\n  generationConfig: {\n    responseMimeType: 'application/json',\n    responseSchema: {\n      type: 'OBJECT',\n      properties: {\n        summary: { type: 'STRING' },\n        decisions: {\n          type: 'ARRAY',\n          items: { type: 'STRING' }\n        },\n        action_items: {\n          type: 'ARRAY',\n          items: {\n            type: 'OBJECT',\n            properties: {\n              task: { type: 'STRING' },\n              owner: { type: 'STRING', nullable: true },\n              deadline: { type: 'STRING', nullable: true },\n              priority: { type: 'STRING', enum: ['low', 'medium', 'high'] }\n            },\n            required: ['task', 'owner', 'deadline', 'priority']\n          }\n        }\n      },\n      required: ['summary', 'decisions', 'action_items']\n    }\n  }\n};\n\nreturn [{\n  json: {\n    job_id: jobId,\n    job_dir: jobDir,\n    speakers: speakers,\n    transcript: transcript,\n    geminiPayload: geminiPayload\n  }\n}];"
+      },
+      "name": "Format Prompt & Gemini Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 240],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc009"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=\"https://generativelanguage.googleapis.com/v1beta/models/\" + ($env.GEMINI_MODEL || \"gemini-1.5-flash\") + \":generateContent\"",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ $json.geminiPayload }}"
+      },
+      "name": "Call Gemini Flash (Analysis)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 240],
+      "onError": "continueErrorOutput",
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc010"
+    },
+    {
+      "parameters": {
+        "jsCode": "const geminiRes = $input.first().json;\nconst prepData = $('Format Prompt & Gemini Payload').first().json;\nconst jobId = prepData.job_id;\nconst jobDir = prepData.job_dir;\nconst speakers = prepData.speakers;\nconst transcript = prepData.transcript;\n\nconst text = geminiRes.candidates?.[0]?.content?.parts?.[0]?.text;\nif (!text) {\n  throw new Error('ANALYSIS_FAILED: Empty response from Gemini');\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(text);\n} catch (e) {\n  throw new Error('INVALID_ANALYSIS_RESULT: Gemini output was not valid JSON');\n}\n\nif (!parsed.summary || typeof parsed.summary !== 'string') {\n  throw new Error('INVALID_ANALYSIS_RESULT: MeetingData.summary must be a non-empty string');\n}\n\nif (!Array.isArray(parsed.decisions)) {\n  throw new Error('INVALID_ANALYSIS_RESULT: MeetingData.decisions must be an array');\n}\n\nif (!Array.isArray(parsed.action_items)) {\n  throw new Error('INVALID_ANALYSIS_RESULT: MeetingData.action_items must be an array');\n}\n\nconst validSpeakerIds = new Set(speakers.map(s => s.speaker_id));\nconst validPriorities = new Set(['low', 'medium', 'high']);\n\nconst normalizedActionItems = parsed.action_items.map(item => {\n  if (!item.task || typeof item.task !== 'string') {\n    throw new Error('INVALID_ANALYSIS_RESULT: ActionItem.task is required');\n  }\n\n  let owner = item.owner;\n  if (typeof owner === 'string') {\n    owner = owner.trim();\n    if (!validSpeakerIds.has(owner)) {\n      const matchingSpeaker = speakers.find(s => s.label.toLowerCase() === owner.toLowerCase());\n      owner = matchingSpeaker ? matchingSpeaker.speaker_id : null;\n    }\n  } else {\n    owner = null;\n  }\n\n  let deadline = (typeof item.deadline === 'string' && item.deadline.trim().length > 0)\n    ? item.deadline.trim()\n    : null;\n\n  let priority = item.priority;\n  if (!validPriorities.has(priority)) {\n    priority = 'medium';\n  }\n\n  return {\n    task: item.task.trim(),\n    owner: owner,\n    deadline: deadline,\n    priority: priority\n  };\n});\n\nconst meetingResult = {\n  speakers: speakers,\n  transcript: transcript,\n  meeting: {\n    summary: parsed.summary.trim(),\n    decisions: parsed.decisions.map(d => String(d).trim()),\n    action_items: normalizedActionItems\n  }\n};\n\nreturn [{\n  json: {\n    job_id: jobId,\n    job_dir: jobDir,\n    meetingResult: meetingResult\n  },\n  binary: {\n    data: {\n      data: Buffer.from(JSON.stringify(meetingResult, null, 2), 'utf-8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'result.json'\n    }\n  }\n}];"
+      },
+      "name": "Validate MeetingData & Assemble Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2640, 240],
+      "onError": "continueErrorOutput",
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc011"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.job_dir }}/result.json",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Write Result: result.json",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [2860, 240],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc012"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate MeetingData & Assemble Result').first().json;\nconst jobId = input.job_id;\nconst jobDir = input.job_dir;\n\nconst jobCompleted = {\n  job_id: jobId,\n  status: 'completed'\n};\n\nreturn [{\n  json: {\n    job_id: jobId,\n    job_dir: jobDir,\n    target_file: `${jobDir}/job.json`\n  },\n  binary: {\n    data: {\n      data: Buffer.from(JSON.stringify(jobCompleted, null, 2), 'utf-8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'job.json'\n    }\n  }\n}];"
+      },
+      "name": "Prepare Completed Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 240],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc013"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.target_file }}",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Update Status: Completed",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [3300, 240],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc014"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/cleanup",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { \"job_id\": $json.job_id } }}",
+        "options": {
+          "response": {
+            "neverError": true
+          }
+        }
+      },
+      "name": "Trigger Cleanup Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3520, 240],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc015"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nlet incomingError = null;\nfor (const item of items) {\n  if (item.json?.error) {\n    incomingError = item.json.error;\n    break;\n  }\n}\n\nlet jobId = 'unknown';\nlet jobDir = '/data/jobs/unknown';\ntry {\n  const v = $('Validate Job & Paths').first().json;\n  jobId = v.job_id || jobId;\n  jobDir = v.job_dir || jobDir;\n} catch (e) {}\n\nlet errorCode = 'PROCESSING_FAILED';\nlet errorMessage = 'An error occurred while processing the meeting.';\n\nconst errStr = String(incomingError?.message || incomingError || '');\n\nif (errStr.includes('INVALID_JOB_ID')) {\n  errorCode = 'INVALID_AUDIO';\n  errorMessage = 'Invalid job reference.';\n} else if (errStr.includes('INVALID_AUDIO') || errStr.includes('audio.webm') || errStr.includes('No file')) {\n  errorCode = 'INVALID_AUDIO';\n  errorMessage = 'Meeting audio file is missing, empty, or unreadable.';\n} else if (errStr.includes('TRANSCRIPTION_FAILED') || errStr.includes('deepgram') || errStr.includes('Deepgram')) {\n  errorCode = 'TRANSCRIPTION_FAILED';\n  errorMessage = 'We were unable to transcribe the meeting audio.';\n} else if (errStr.includes('ANALYSIS_FAILED') || errStr.includes('gemini') || errStr.includes('Gemini')) {\n  errorCode = 'ANALYSIS_FAILED';\n  errorMessage = 'We were unable to complete the meeting analysis.';\n} else if (errStr.includes('INVALID_ANALYSIS_RESULT')) {\n  errorCode = 'INVALID_ANALYSIS_RESULT';\n  errorMessage = 'The meeting analysis result was invalid or malformed.';\n}\n\nconst jobFailed = {\n  job_id: jobId,\n  status: 'failed',\n  error: {\n    code: errorCode,\n    message: errorMessage\n  }\n};\n\nreturn [{\n  json: {\n    job_id: jobId,\n    job_dir: jobDir,\n    target_file: `${jobDir}/job.json`\n  },\n  binary: {\n    data: {\n      data: Buffer.from(JSON.stringify(jobFailed, null, 2), 'utf-8').toString('base64'),\n      mimeType: 'application/json',\n      fileName: 'job.json'\n    }\n  }\n}];"
+      },
+      "name": "Error Handler & Sanitizer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 520],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc016"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $json.target_file }}",
+        "dataPropertyName": "data",
+        "options": {
+          "append": false
+        }
+      },
+      "name": "Write Failed Status -> job.json",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [2420, 520],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc017"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/cleanup",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { \"job_id\": $json.job_id } }}",
+        "options": {
+          "response": {
+            "neverError": true
+          }
+        }
+      },
+      "name": "Trigger Cleanup on Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 520],
+      "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc018"
     }
   ],
-  "connections": {},
-  "active": false,
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Job & Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Job & Paths": {
+      "main": [
+        [
+          {
+            "node": "Update Status: Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status: Processing": {
+      "main": [
+        [
+          {
+            "node": "Read Audio File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Audio File": {
+      "main": [
+        [
+          {
+            "node": "Validate Audio & Prepare Transcribing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler & Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Audio & Prepare Transcribing": {
+      "main": [
+        [
+          {
+            "node": "Update Status: Transcribing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler & Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status: Transcribing": {
+      "main": [
+        [
+          {
+            "node": "Call Deepgram (STT + Diarize)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Deepgram (STT + Diarize)": {
+      "main": [
+        [
+          {
+            "node": "Deepgram Adapter & Transcript Normalization",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler & Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deepgram Adapter & Transcript Normalization": {
+      "main": [
+        [
+          {
+            "node": "Update Status: Analyzing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler & Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status: Analyzing": {
+      "main": [
+        [
+          {
+            "node": "Format Prompt & Gemini Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Prompt & Gemini Payload": {
+      "main": [
+        [
+          {
+            "node": "Call Gemini Flash (Analysis)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Gemini Flash (Analysis)": {
+      "main": [
+        [
+          {
+            "node": "Validate MeetingData & Assemble Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler & Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate MeetingData & Assemble Result": {
+      "main": [
+        [
+          {
+            "node": "Write Result: result.json",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler & Sanitizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Result: result.json": {
+      "main": [
+        [
+          {
+            "node": "Prepare Completed Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Completed Status": {
+      "main": [
+        [
+          {
+            "node": "Update Status: Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Status: Completed": {
+      "main": [
+        [
+          {
+            "node": "Trigger Cleanup Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler & Sanitizer": {
+      "main": [
+        [
+          {
+            "node": "Write Failed Status -> job.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Failed Status -> job.json": {
+      "main": [
+        [
+          {
+            "node": "Trigger Cleanup on Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "executionOrder": "v1"
   },
