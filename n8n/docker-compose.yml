@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports:
       - "5678:5678"
+    env_file:
+      - ../.env
     environment:
       - N8N_BASIC_AUTH_ACTIVE=false
       - N8N_HOST=localhost
@@ -19,10 +21,9 @@ services:
       - EXECUTIONS_DATA_MAX_AGE=24
       # Shared job storage directory inside container
       - JOB_STORAGE_DIR=/data/jobs
+      - N8N_RESTRICT_FILE_ACCESS_TO=/data/jobs;~/.n8n-files
       - NODE_FUNCTION_ALLOW_BUILTIN=fs
-      # Provider API credentials (injected from .env)
-      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     volumes:
       - n8n_data:/home/node/.n8n
       # Shared filesystem mount: host job storage mapped into n8n container
