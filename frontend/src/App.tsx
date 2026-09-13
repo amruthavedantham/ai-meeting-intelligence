@@ -6,7 +6,7 @@ import { Transcript } from "./components/Transcript/Transcript";
 import { createMeeting, getMeetingStatus } from "./api/meetingApi";
 import { JobStatus, MeetingResult } from "./contracts/types";
 
-type UIState = "IDLE" | "PROCESSING" | "RESULTS" | "ERROR";
+export type UIState = "IDLE" | "RECORDING" | "UPLOADING" | "PROCESSING" | "RESULTS" | "ERROR";
 
 export const App: React.FC = () => {
   const [uiState, setUiState] = useState<UIState>("IDLE");
@@ -15,10 +15,11 @@ export const App: React.FC = () => {
   const [meetingResult, setMeetingResult] = useState<MeetingResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Triggered when user selects a file or sample audio
+  // Triggered when user selects a file or recording completes
   const handleAudioSelected = async (audio: Blob) => {
     try {
       setErrorMessage(null);
+      setUiState("UPLOADING");
       const res = await createMeeting(audio);
       setJobId(res.job_id);
       setJobStatus("queued");
@@ -26,6 +27,14 @@ export const App: React.FC = () => {
     } catch (err) {
       setErrorMessage((err as Error).message || "Failed to submit meeting audio.");
       setUiState("ERROR");
+    }
+  };
+
+  const handleRecordingStateChange = (isRecording: boolean) => {
+    if (isRecording) {
+      setUiState("RECORDING");
+    } else {
+      setUiState((current) => (current === "RECORDING" ? "IDLE" : current));
     }
   };
 
@@ -100,19 +109,55 @@ export const App: React.FC = () => {
       </header>
 
       <main>
-        {uiState === "IDLE" && <Recorder onAudioSelected={handleAudioSelected} />}
+        {(uiState === "IDLE" || uiState === "RECORDING") && (
+          <Recorder
+            onAudioSelected={handleAudioSelected}
+            onRecordingStateChange={handleRecordingStateChange}
+          />
+        )}
+
+        {uiState === "UPLOADING" && (
+          <div
+            className="card"
+            data-testid="uploading-card"
+            style={{ textAlign: "center", padding: "3rem 1.5rem" }}
+          >
+            <div
+              style={{
+                display: "inline-block",
+                width: "44px",
+                height: "44px",
+                borderRadius: "50%",
+                border: "3px solid rgba(59, 130, 246, 0.2)",
+                borderTopColor: "var(--accent-primary)",
+                animation: "spin 1s linear infinite",
+                marginBottom: "1.25rem",
+              }}
+            />
+            <h2 style={{ marginBottom: "0.5rem" }}>Uploading Audio...</h2>
+            <p style={{ color: "var(--text-secondary)" }}>
+              Uploading your meeting recording to initialize analysis.
+            </p>
+          </div>
+        )}
 
         {uiState === "PROCESSING" && jobId && (
           <ProcessingStatus jobId={jobId} status={jobStatus} />
         )}
 
         {uiState === "ERROR" && (
-          <div className="card" style={{ borderColor: "var(--danger)" }}>
+          <div className="card" data-testid="error-card" style={{ borderColor: "var(--danger)" }}>
             <h2 style={{ color: "var(--danger)" }}>Processing Failed</h2>
-            <p style={{ marginBottom: "1.25rem" }}>
+            <p data-testid="error-message" style={{ marginBottom: "1.25rem" }}>
               {errorMessage || "An unexpected error occurred while processing the meeting."}
             </p>
-            <button type="button" className="btn-primary" onClick={handleReset}>
+            <button
+              type="button"
+              data-testid="retry-button"
+              className="btn-primary"
+              onClick={handleReset}
+              style={{ background: "var(--accent-primary)", color: "#fff" }}
+            >
               Try Another Meeting
             </button>
           </div>
@@ -122,10 +167,11 @@ export const App: React.FC = () => {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
               <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
-                Job ID: <code style={{ color: "var(--accent-primary)" }}>{jobId}</code>
+                Job ID: <code data-testid="results-job-id" style={{ color: "var(--accent-primary)" }}>{jobId}</code>
               </span>
               <button
                 type="button"
+                data-testid="new-meeting-button"
                 onClick={handleReset}
                 style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff", fontSize: "0.85rem", padding: "0.4rem 0.8rem" }}
               >

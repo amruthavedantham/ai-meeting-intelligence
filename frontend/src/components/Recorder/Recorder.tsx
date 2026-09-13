@@ -5,6 +5,7 @@ export interface RecorderProps {
   onAudioSelected: (audio: Blob) => void;
   audioRecorder?: AudioRecorder;
   disabled?: boolean;
+  onRecordingStateChange?: (isRecording: boolean) => void;
 }
 
 function formatTimer(seconds: number): string {
@@ -17,6 +18,7 @@ export const Recorder: React.FC<RecorderProps> = ({
   onAudioSelected,
   audioRecorder = defaultAudioRecorder,
   disabled = false,
+  onRecordingStateChange,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -41,12 +43,14 @@ export const Recorder: React.FC<RecorderProps> = ({
     try {
       await audioRecorder.startRecording();
       setIsRecording(true);
+      onRecordingStateChange?.(true);
 
       timerRef.current = window.setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
     } catch (err) {
       setIsRecording(false);
+      onRecordingStateChange?.(false);
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -69,9 +73,11 @@ export const Recorder: React.FC<RecorderProps> = ({
     try {
       const audioBlob = await audioRecorder.stopRecording();
       setIsRecording(false);
+      onRecordingStateChange?.(false);
       onAudioSelected(audioBlob);
     } catch (err) {
       setIsRecording(false);
+      onRecordingStateChange?.(false);
       setErrorMessage(`Failed to finalize recording: ${(err as Error).message}`);
     }
   };
@@ -87,13 +93,6 @@ export const Recorder: React.FC<RecorderProps> = ({
     if (selectedFile) {
       onAudioSelected(selectedFile);
     }
-  };
-
-  const handleGenerateSampleAudio = () => {
-    // Generate a mock 30-second WebM audio blob for testing the processing pipeline
-    const mockAudioData = new Uint8Array(1024 * 16);
-    const sampleBlob = new Blob([mockAudioData], { type: "audio/webm" });
-    onAudioSelected(sampleBlob);
   };
 
   return (
@@ -187,15 +186,6 @@ export const Recorder: React.FC<RecorderProps> = ({
               style={{ background: "rgba(255, 255, 255, 0.1)", color: "#fff" }}
             >
               Upload Audio File
-            </button>
-
-            <button
-              type="button"
-              onClick={handleGenerateSampleAudio}
-              disabled={disabled}
-              style={{ background: "transparent", border: "1px solid var(--bg-card-border)", color: "var(--text-secondary)" }}
-            >
-              Use Sample 30s Audio
             </button>
           </div>
 

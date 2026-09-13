@@ -122,3 +122,12 @@ button:disabled {
 .btn-danger:hover:not(:disabled) {
   background-color: #dc2626;
 }
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

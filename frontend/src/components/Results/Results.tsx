@@ -24,20 +24,48 @@ export const Results: React.FC<ResultsProps> = ({
   };
 
   return (
-    <div className="card results-card">
-      <div style={{ marginBottom: "1.75rem" }}>
+    <div className="card results-card" data-testid="results-card">
+      {/* Meeting Summary */}
+      <div style={{ marginBottom: "1.75rem" }} data-testid="summary-section">
         <h2>Meeting Summary</h2>
-        <p style={{ lineHeight: 1.6, color: "var(--text-primary)" }}>{meeting.summary}</p>
+        <p data-testid="meeting-summary" style={{ lineHeight: 1.6, color: "var(--text-primary)" }}>
+          {meeting.summary}
+        </p>
       </div>
 
-      <div style={{ marginBottom: "1.75rem" }}>
+      {/* Participants / Speakers */}
+      <div style={{ marginBottom: "1.75rem" }} data-testid="speakers-section">
+        <h2>Participants ({speakers.length})</h2>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          {speakers.map((s) => (
+            <span
+              key={s.speaker_id}
+              data-testid={`speaker-chip-${s.speaker_id}`}
+              style={{
+                background: "rgba(59, 130, 246, 0.12)",
+                color: "var(--accent-primary)",
+                border: "1px solid var(--accent-glow)",
+                borderRadius: "var(--radius-sm)",
+                padding: "0.3rem 0.75rem",
+                fontSize: "0.85rem",
+                fontWeight: 500,
+              }}
+            >
+              {s.label} ({s.speaker_id})
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Decisions */}
+      <div style={{ marginBottom: "1.75rem" }} data-testid="decisions-section">
         <h2>Decisions ({meeting.decisions.length})</h2>
         {meeting.decisions.length === 0 ? (
-          <p style={{ color: "var(--text-muted)" }}>No explicit decisions recorded.</p>
+          <p data-testid="no-decisions" style={{ color: "var(--text-muted)" }}>No explicit decisions recorded.</p>
         ) : (
-          <ul style={{ paddingLeft: "1.25rem" }}>
+          <ul data-testid="decisions-list" style={{ paddingLeft: "1.25rem" }}>
             {meeting.decisions.map((decision, idx) => (
-              <li key={idx} style={{ color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+              <li key={idx} data-testid={`decision-item-${idx}`} style={{ color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
                 {decision}
               </li>
             ))}
@@ -45,85 +73,101 @@ export const Results: React.FC<ResultsProps> = ({
         )}
       </div>
 
-      <div>
+      {/* Action Items */}
+      <div data-testid="action-items-section">
         <h2>Action Items ({meeting.action_items.length})</h2>
         <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
           Owners can be adjusted directly below. Edits remain client-side without re-running the AI.
         </p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {meeting.action_items.map((item, idx) => (
-            <div
-              key={idx}
-              style={{
-                padding: "1rem",
-                borderRadius: "var(--radius-md)",
-                background: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid var(--bg-card-border)",
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "1rem",
-              }}
-            >
-              <div style={{ flex: "1 1 300px" }}>
-                <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
-                  {item.task}
+          {meeting.action_items.length === 0 ? (
+            <p data-testid="no-action-items" style={{ color: "var(--text-muted)" }}>No action items recorded.</p>
+          ) : (
+            meeting.action_items.map((item, idx) => (
+              <div
+                key={idx}
+                data-testid={`action-item-${idx}`}
+                style={{
+                  padding: "1rem",
+                  borderRadius: "var(--radius-md)",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--bg-card-border)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                }}
+              >
+                <div style={{ flex: "1 1 300px" }}>
+                  <div
+                    data-testid={`action-task-${idx}`}
+                    style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem" }}
+                  >
+                    {item.task}
+                  </div>
+                  <div
+                    data-testid={`action-deadline-${idx}`}
+                    style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
+                  >
+                    Deadline: {item.deadline || "None"}
+                  </div>
                 </div>
-                <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  Deadline: {item.deadline || "None"}
-                </div>
-              </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                {/* Local Owner Editing Dropdown */}
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <label htmlFor={`owner-select-${idx}`} style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                    Owner:
-                  </label>
-                  <select
-                    id={`owner-select-${idx}`}
-                    value={item.owner || ""}
-                    onChange={(e) => {
-                      const value = e.target.value === "" ? null : e.target.value;
-                      onOwnerChange(idx, value);
-                    }}
+                <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                  {/* Local Owner Editing Dropdown */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <label htmlFor={`owner-select-${idx}`} style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                      Owner:
+                    </label>
+                    <select
+                      id={`owner-select-${idx}`}
+                      data-testid={`owner-select-${idx}`}
+                      value={item.owner || ""}
+                      onChange={(e) => {
+                        const value = e.target.value === "" ? null : e.target.value;
+                        onOwnerChange(idx, value);
+                      }}
+                      style={{
+                        background: "var(--bg-secondary)",
+                        color: "var(--text-primary)",
+                        border: "1px solid var(--bg-card-border)",
+                        padding: "0.35rem 0.6rem",
+                        borderRadius: "var(--radius-sm)",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="">Unassigned</option>
+                      {speakers.map((speaker) => (
+                        <option key={speaker.speaker_id} value={speaker.speaker_id}>
+                          {speaker.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Priority Badge */}
+                  <span
+                    data-testid={`priority-badge-${item.priority}`}
+                    data-item-index={idx}
                     style={{
-                      background: "var(--bg-secondary)",
-                      color: "var(--text-primary)",
-                      border: "1px solid var(--bg-card-border)",
-                      padding: "0.35rem 0.6rem",
-                      borderRadius: "var(--radius-sm)",
-                      fontSize: "0.85rem",
+                      padding: "0.25rem 0.65rem",
+                      borderRadius: "12px",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      ...getPriorityBadgeStyle(item.priority),
                     }}
                   >
-                    <option value="">Unassigned</option>
-                    {speakers.map((speaker) => (
-                      <option key={speaker.speaker_id} value={speaker.speaker_id}>
-                        {speaker.label}
-                      </option>
-                    ))}
-                  </select>
+                    {item.priority}
+                  </span>
                 </div>
-
-                {/* Priority Badge */}
-                <span
-                  style={{
-                    padding: "0.25rem 0.65rem",
-                    borderRadius: "12px",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    ...getPriorityBadgeStyle(item.priority),
-                  }}
-                >
-                  {item.priority}
-                </span>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>
