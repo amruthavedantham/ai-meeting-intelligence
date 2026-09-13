@@ -13,7 +13,10 @@
       "name": "Webhook Trigger",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [220, 300],
+      "position": [
+        220,
+        300
+      ],
       "webhookId": "process-meeting",
       "id": "de69a75c-19d9-4b8c-88f2-e197ad7b272e"
     },
@@ -24,7 +27,10 @@
       "name": "Validate Job & Paths",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [440, 300],
+      "position": [
+        440,
+        300
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc001"
     },
     {
@@ -39,7 +45,10 @@
       "name": "Update Status: Processing",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [660, 300],
+      "position": [
+        660,
+        300
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc002"
     },
     {
@@ -53,7 +62,10 @@
       "name": "Read Audio File",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [880, 300],
+      "position": [
+        880,
+        300
+      ],
       "onError": "continueErrorOutput",
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc003"
     },
@@ -64,7 +76,10 @@
       "name": "Validate Audio & Prepare Transcribing",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 240],
+      "position": [
+        1100,
+        240
+      ],
       "onError": "continueErrorOutput",
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc004"
     },
@@ -80,7 +95,10 @@
       "name": "Update Status: Transcribing",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [1320, 240],
+      "position": [
+        1320,
+        240
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc005"
     },
     {
@@ -90,18 +108,39 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            { "name": "model", "value": "nova-2" },
-            { "name": "smart_format", "value": "true" },
-            { "name": "diarize", "value": "true" },
-            { "name": "multichannel", "value": "true" },
-            { "name": "utterances", "value": "true" }
+            {
+              "name": "model",
+              "value": "nova-2"
+            },
+            {
+              "name": "smart_format",
+              "value": "true"
+            },
+            {
+              "name": "diarize",
+              "value": "true"
+            },
+            {
+              "name": "multichannel",
+              "value": "true"
+            },
+            {
+              "name": "utterances",
+              "value": "true"
+            }
           ]
         },
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "=Token {{ $env.DEEPGRAM_API_KEY }}" },
-            { "name": "Content-Type", "value": "audio/webm" }
+            {
+              "name": "Authorization",
+              "value": "=Token {{ $env.DEEPGRAM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "audio/webm"
+            }
           ]
         },
         "sendBody": true,
@@ -111,7 +150,10 @@
       "name": "Call Deepgram (STT + Diarize)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1540, 240],
+      "position": [
+        1540,
+        240
+      ],
       "onError": "continueErrorOutput",
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc006"
     },
@@ -122,7 +164,10 @@
       "name": "Deepgram Adapter & Transcript Normalization",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1760, 240],
+      "position": [
+        1760,
+        240
+      ],
       "onError": "continueErrorOutput",
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc007"
     },
@@ -138,7 +183,10 @@
       "name": "Update Status: Analyzing",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [1980, 240],
+      "position": [
+        1980,
+        240
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc008"
     },
     {
@@ -148,28 +196,41 @@
       "name": "Format Prompt & Gemini Payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2200, 240],
+      "position": [
+        2200,
+        240
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc009"
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "=\"https://generativelanguage.googleapis.com/v1beta/models/\" + ($env.GEMINI_MODEL || \"gemini-1.5-flash\") + \":generateContent\"",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $env.GEMINI_MODEL || 'gemini-3.5-flash' }}:generateContent",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-goog-api-key", "value": "={{ $env.GEMINI_API_KEY }}" },
-            { "name": "Content-Type", "value": "application/json" }
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={{ $json.geminiPayload }}"
+        "jsonBody": "={{ $json.geminiPayload }}",
+        "specifyBody": "json"
       },
       "name": "Call Gemini Flash (Analysis)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2420, 240],
+      "position": [
+        2420,
+        240
+      ],
       "onError": "continueErrorOutput",
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc010"
     },
@@ -180,7 +241,10 @@
       "name": "Validate MeetingData & Assemble Result",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2640, 240],
+      "position": [
+        2640,
+        240
+      ],
       "onError": "continueErrorOutput",
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc011"
     },
@@ -196,7 +260,10 @@
       "name": "Write Result: result.json",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [2860, 240],
+      "position": [
+        2860,
+        240
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc012"
     },
     {
@@ -206,7 +273,10 @@
       "name": "Prepare Completed Status",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [3080, 240],
+      "position": [
+        3080,
+        240
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc013"
     },
     {
@@ -221,7 +291,10 @@
       "name": "Update Status: Completed",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [3300, 240],
+      "position": [
+        3300,
+        240
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc014"
     },
     {
@@ -230,17 +303,21 @@
         "url": "http://localhost:5678/webhook/cleanup",
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={{ { \"job_id\": $json.job_id } }}",
+        "jsonBody": "={{ JSON.stringify({ job_id: $('Validate Job & Paths').first().json.job_id }) }}",
         "options": {
           "response": {
             "neverError": true
           }
-        }
+        },
+        "specifyBody": "json"
       },
       "name": "Trigger Cleanup Workflow",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3520, 240],
+      "position": [
+        3520,
+        240
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc015"
     },
     {
@@ -250,7 +327,10 @@
       "name": "Error Handler & Sanitizer",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2200, 520],
+      "position": [
+        2200,
+        520
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc016"
     },
     {
@@ -265,7 +345,10 @@
       "name": "Write Failed Status -> job.json",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [2420, 520],
+      "position": [
+        2420,
+        520
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc017"
     },
     {
@@ -274,17 +357,21 @@
         "url": "http://localhost:5678/webhook/cleanup",
         "sendBody": true,
         "contentType": "json",
-        "jsonBody": "={{ { \"job_id\": $json.job_id } }}",
+        "jsonBody": "={{ JSON.stringify({ job_id: $('Validate Job & Paths').first().json.job_id }) }}",
         "options": {
           "response": {
             "neverError": true
           }
-        }
+        },
+        "specifyBody": "json"
       },
       "name": "Trigger Cleanup on Failure",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2640, 520],
+      "position": [
+        2640,
+        520
+      ],
       "id": "7bf3b3a1-79cb-4c5e-8517-8e6d30fbc018"
     }
   ],
