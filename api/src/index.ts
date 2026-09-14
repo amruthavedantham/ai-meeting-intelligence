@@ -57,6 +57,26 @@ app.use(
 async function startServer(): Promise<void> {
   await defaultJobStore.initStorage();
 
+  // TTL safety cleanup: run once at startup, then every hour
+  const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+  const runCleanup = async (): Promise<void> => {
+    try {
+      const removed = await defaultJobStore.cleanupExpiredJobs();
+      if (removed.length > 0) {
+        console.log(`[API] TTL cleanup removed ${removed.length} expired job(s): ${removed.join(", ")}`);
+      }
+    } catch (err) {
+      console.error("[API] TTL cleanup error:", err);
+    }
+  };
+
+  // Initial cleanup
+  await runCleanup();
+
+  // Schedule periodic cleanup
+  setInterval(runCleanup, CLEANUP_INTERVAL_MS);
+
   app.listen(port, () => {
     console.log(`[API] AI Meeting Intelligence API listening on port ${port}`);
   });

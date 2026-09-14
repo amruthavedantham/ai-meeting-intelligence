@@ -152,6 +152,51 @@ export class JobStore {
       return false;
     }
   }
+
+  /**
+   * Removes job directories older than ttlSeconds.
+   * Safe and idempotent: non-job entries, missing directories,
+   * and stat failures do not cause the cleanup to crash.
+   * Returns the list of removed job IDs.
+   */
+  public async cleanupExpiredJobs(): Promise<string[]> {
+    const removed: string[] = [];
+    const nowMs = Date.now();
+
+    let entries: string[];
+    try {
+      entries = await fs.readdir(this.storageDir);
+    } catch {
+      // Storage directory doesn't exist yet — nothing to clean up
+      return removed;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(this.storageDir, entry);
+
+      try {
+        const stat = await fs.stat(entryPath);
+
+        // Only process directories
+        if (!stat.isDirectory()) {
+          continue;
+        }
+
+        const ageMs = nowMs - stat.mtimeMs;
+        const ageSec = ageMs / 1000;
+
+        if (ageSec > this.ttlSeconds) {
+          await fs.rm(entryPath, { recursive: true, force: true });
+          removed.push(entry);
+        }
+      } catch {
+        // Entry disappeared or is unreadable — skip safely
+        continue;
+      }
+    }
+
+    return removed;
+  }
 }
 
 export const defaultJobStore = new JobStore();
